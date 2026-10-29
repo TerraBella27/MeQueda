@@ -1,5 +1,5 @@
 
-const CACHE = 'mequeda-shell-v3';
+const CACHE = 'mequeda-shell-v4';
 
 const FILES = [
   './',
@@ -22,7 +22,10 @@ self.addEventListener('activate', event => {
     caches.keys()
       .then(keys => Promise.all(
         keys
-          .filter(key => key.startsWith('mequeda-shell-') && key !== CACHE)
+          .filter(key =>
+            key.startsWith('mequeda-shell-') &&
+            key !== CACHE
+          )
           .map(key => caches.delete(key))
       ))
       .then(() => self.clients.claim())
@@ -33,16 +36,43 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  const isManifest = url.pathname.endsWith('/manifest.json');
-  const isIcon = /\/icon-(192|512)\.png$/.test(url.pathname);
+  const sameOrigin = url.origin === self.location.origin;
+  const isAppPage =
+    sameOrigin &&
+    (event.request.mode === 'navigate' ||
+     url.pathname.endsWith('/index.html') ||
+     url.pathname.endsWith('/MeQueda/'));
 
-  if (isManifest || isIcon) {
+  if (isAppPage) {
     event.respondWith(
       fetch(event.request)
         .then(response => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(CACHE).then(cache => cache.put(event.request, copy));
+            caches.open(CACHE)
+              .then(cache => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(async () => {
+          return await caches.match(event.request) ||
+                 await caches.match('./index.html');
+        })
+    );
+    return;
+  }
+
+  const isManifest = url.pathname.endsWith('/manifest.json');
+  const isIcon = /\/icon-(192|512)\.png$/.test(url.pathname);
+
+  if (sameOrigin && (isManifest || isIcon)) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE)
+              .then(cache => cache.put(event.request, copy));
           }
           return response;
         })
@@ -54,14 +84,7 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
-
-      return fetch(event.request).then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put(event.request, copy));
-        }
-        return response;
-      });
+      return fetch(event.request);
     })
   );
 });
