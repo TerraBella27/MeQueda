@@ -1,5 +1,5 @@
 
-const CACHE = 'mequeda-shell-v2';
+const CACHE = 'mequeda-shell-v3';
 
 const FILES = [
   './',
